@@ -21,5 +21,4 @@ Stay sharp. Stay ethical. Stay anonymous.
 |How to Use This Script|
 git clone https://github.com/v1p3rc0d3/Hacking-a-Printer
 cd Hacking-a-Printer
-pip install tqdm & pyfiglet
 python HackPrinter.py
