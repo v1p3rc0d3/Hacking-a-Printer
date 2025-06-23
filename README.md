@@ -19,11 +19,7 @@ Unauthorized use or attacks are strictly forbidden.
 Stay sharp. Stay ethical. Stay anonymous.
 
 |How to Use This Script|
-----Clone the Repository----
 git clone https://github.com/v1p3rc0d3/Hacking-a-Printer
-----Navigate Into the Project Directory----
 cd Hacking-a-Printer
-----Install Required Dependencies----
 pip install tqdm & pyfiglet
-----Run the Script----
 python HackPrinter.py
