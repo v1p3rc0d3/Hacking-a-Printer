@@ -1,4 +1,4 @@
-# Hacking-a-Printer
+# HackPrinter
 -----This Script Hack A Printer ;) -----
 
 >> This script stealthily scans your Wi-Fi network for printers
